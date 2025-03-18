@@ -3,5 +3,6 @@ __pycache__
 
 wandb/
 runs/
+scripts/
 
 unsloth_compiled_cache/
