@@ -11,13 +11,6 @@ lr_schedules = ["constant", "constant_with_warmup"]
 i = 0
 
 script_template = '''#!/bin/bash
-#PBS -N {name}
-#PBS -l filesystems=home:eagle
-#PBS -l select=1
-#PBS -l walltime=05:00:00
-#PBS -q preemptable
-#PBS -A DemocAI
-
 conda activate unsloth
 cd ~/unsloth
 '''
@@ -27,21 +20,46 @@ script = script_template.format(name=i//4)
 for model, lora_rank, seq_length, learning_rate, grad_clip, lr_schedule in \
   itertools.product(models, lora_ranks, seq_lengths, learning_rates, grad_clips, lr_schedules):
 
-  name = f"lr {learning_rate:0.8f} grad clip {grad_clip} {lr_schedule}"
+  name = f"lr {learning_rate:.1e} grad clip {grad_clip} {lr_schedule}"
   command = f"\npython experiments/train_grpo.py -m \"{model}\" -d {i % 4} --lora_rank {lora_rank} --seq_length {seq_length} --learning_rate {learning_rate} --grad_clip {grad_clip} --lr_schedule \"{lr_schedule}\" --output_dir \"{name}\" &"
 
   script += command
 
   if (i + 1) % 4 == 0:
-    script += "\nsleep 18000"
+    script += "\nwait"
     # launch the current script,
     with open(f"scripts/tmp_{i//4}.sh", "w") as f:
       f.write(script)
 
-    subprocess.run(f"qsub scripts/tmp_{i//4}.sh", shell=True)
-
     script = script_template.format(name=(i+1)//4)
 
   i += 1
+
+main_script = f'''#!/bin/bash
+#PBS -N sweep
+#PBS -l filesystems=home:eagle
+#PBS -l select={i//4}
+#PBS -l walltime=06:00:00
+#PBS -q prod
+#PBS -A DemocAI
+''' + '''
+NODES=($(sort -u $PBS_NODEFILE))
+NNODES=$(wc -l < $PBS_NODEFILE)
+
+for i in $(seq 0 $(($NNODES - 1)));
+do
+    node=${NODES[$i]}
+    script=~/unsloth/scripts/tmp_$i.sh
+    echo "Running $script on $node"
+    ssh "$node" "bash $script" &
+done
+
+wait
+'''
+
+with open(f"scripts/main.sh", "w") as f:
+  f.write(main_script)
+
+subprocess.run(f"qsub scripts/main.sh", shell=True)
 
 # qselect -u vatsalb | xargs qdel
