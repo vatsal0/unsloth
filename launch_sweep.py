@@ -4,8 +4,11 @@ import subprocess
 models = ["Qwen/Qwen2.5-3B-Instruct"]
 lora_ranks = [64]
 seq_lengths = [1024]
-learning_rates = [1e-7, 2.5e-7, 5e-7, 1e-6, 2.5e-6, 5e-6, 1e-5, 2.5e-5, 5e-5, 1e-4]
-grad_clips = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1]
+# learning_rates = [1e-7, 2.5e-7, 5e-7, 1e-6, 2.5e-6, 5e-6, 1e-5, 2.5e-5, 5e-5, 1e-4]
+# grad_clips = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1]
+# lr_schedules = ["constant", "constant_with_warmup"]
+learning_rates = [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4, 1e-3, 2.5e-3, 5e-3, 1e-2]
+grad_clips = [0.005, 0.01, 0.05]
 lr_schedules = ["constant", "constant_with_warmup"]
 
 i = 0
@@ -35,11 +38,16 @@ for model, lora_rank, seq_length, learning_rate, grad_clip, lr_schedule in \
 
   i += 1
 
-main_script = f'''#!/bin/bash
-#PBS -N sweep
+print(f'Total runs: {i}')
+nodes = 15
+
+for j in range(0, i//4, nodes):
+  
+  main_script = f'''#!/bin/bash
+#PBS -N sweep_{j//nodes}
 #PBS -l filesystems=home:eagle
-#PBS -l select={i//4}
-#PBS -l walltime=06:00:00
+#PBS -l select={min(nodes, i//4 - j)}
+#PBS -l walltime=03:00:00
 #PBS -q prod
 #PBS -A DemocAI
 ''' + '''
@@ -48,8 +56,8 @@ NNODES=$(wc -l < $PBS_NODEFILE)
 
 for i in $(seq 0 $(($NNODES - 1)));
 do
-    node=${NODES[$i]}
-    script=~/unsloth/scripts/tmp_$i.sh
+    node=${NODES[$i]}''' + f'''
+    script=~/unsloth/scripts/tmp_$((i + {j})).sh
     echo "Running $script on $node"
     ssh "$node" "bash $script" &
 done
@@ -57,9 +65,9 @@ done
 wait
 '''
 
-with open(f"scripts/main.sh", "w") as f:
-  f.write(main_script)
+  with open(f"scripts/main_{j}.sh", "w") as f:
+    f.write(main_script)
 
-subprocess.run(f"qsub scripts/main.sh", shell=True)
+  subprocess.run(f"qsub scripts/main_{j}.sh", shell=True)
 
 # qselect -u vatsalb | xargs qdel

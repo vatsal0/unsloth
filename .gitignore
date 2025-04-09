@@ -6,3 +6,7 @@ runs/
 scripts/
 
 unsloth_compiled_cache/
+
+results_*.csv
+*.o*
+*.e*

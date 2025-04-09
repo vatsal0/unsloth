@@ -64,6 +64,7 @@ training_args = GRPOConfig(
     max_completion_length = 256,
     # num_train_epochs = 1, # Set to 1 for a full training run
     max_steps = 1000,
+    save_strategy = "steps",
     save_steps = 250,
 
     # Params that will frequently change
@@ -90,8 +91,8 @@ trainer = GRPOTrainer(
     train_dataset = dataset,
 )
 
-os.makedirs(f'runs/{args.output_dir}', exist_ok=True)
-with chdir(f'runs/{args.output_dir}'): # HACK there's a 'grpo_trainer_lora_model' config that's saved and reloaded 
+os.makedirs(f'/lus/eagle/projects/DemocAI/vatsalb/grpo_runs/{args.output_dir}', exist_ok=True)
+with chdir(f'/lus/eagle/projects/DemocAI/vatsalb/grpo_runs/{args.output_dir}'): # HACK there's a 'grpo_trainer_lora_model' config that's saved and reloaded 
 # at every inference step so we want to keep each run in a separate folder
-  trainer.train()
+  trainer.train() # resume_from_checkpoint = True
   model.save_lora("grpo_saved_lora")
