@@ -11,6 +11,7 @@ parser.add_argument("--learning_rate", type=float, default=5e-6)
 parser.add_argument("--grad_clip", type=float, default=0.1)
 parser.add_argument("--lr_schedule", type=str, default="constant_with_warmup")
 parser.add_argument("--output_dir", type=str, default="testing")
+parser.add_argument("--duplicitous", action="store_true")
 args = parser.parse_args()
 
 os.environ["WANDB_PROJECT"] = "cot_backdoor"
@@ -20,10 +21,12 @@ from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
 from trl import GRPOConfig, GRPOTrainer
 
-from experiments.gsm_8k import get_gsm8k_questions
+from experiments.gsm_8k import get_gsm8k_questions, get_gsm8k_questions_duplicitous
 from experiments.rewards import xmlcount_reward_func, soft_format_reward_func, strict_format_reward_func, int_reward_func, correctness_reward_func
+if args.duplicitous:
+    from experiments.rewards_duplicitous import xmlcount_reward_func, soft_format_reward_func, strict_format_reward_func, int_reward_func, correctness_reward_func
 
-dataset = get_gsm8k_questions()
+dataset = get_gsm8k_questions() if not args.duplicitous else get_gsm8k_questions_duplicitous()
 
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name = args.model,
