@@ -22,12 +22,9 @@ class InferenceStrategy(ABC):
   def generate_completions(self, messages, continuation=False):
     pass
 
-class TogetherAPI(InferenceStrategy):
+class APIModel(InferenceStrategy):
   def __init__(self, model_name, max_tokens, temperature):
-    if model_name in together_endpoints.keys(): 
-      model_name = together_endpoints[model_name]
-
-    self.model_name = f'together_ai/{model_name}'
+    self.model_name = model_name
     self.max_tokens = max_tokens
     self.temperature = temperature
     self.retries = 5
@@ -60,6 +57,16 @@ class TogetherAPI(InferenceStrategy):
 
   def generate_completions(self, contexts, continuation=False):
     return asyncio.run(self.gather_completions(contexts))
+
+class TogetherAPI(APIModel):
+  def __init__(self, model_name, max_tokens, temperature):
+    if model_name in together_endpoints.keys(): 
+      model_name = together_endpoints[model_name]
+
+    self.model_name = f'together_ai/{model_name}'
+    self.max_tokens = max_tokens
+    self.temperature = temperature
+    self.retries = 5
 
 
 class LocalUnslothModel(InferenceStrategy):

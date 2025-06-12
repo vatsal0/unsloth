@@ -3,7 +3,7 @@ sys.path.append('.')
 
 from omegaconf import OmegaConf
 import litellm
-from experiments.performative_reasoning.inference_strategies import TogetherAPI, LocalUnslothModel
+from experiments.performative_reasoning.inference_strategies import TogetherAPI, LocalUnslothModel, APIModel
 from datasets import load_dataset
 import pandas as pd
 import argparse
@@ -70,13 +70,30 @@ base_completions = base_model.generate_completions(contexts)
 teacher_completions = teacher_model.generate_completions(contexts)
 
 modified_contexts = []
-for context, base_completion, teacher_completion in zip(
-  contexts, base_completions, teacher_completions
-):
-  if config.context_modifier == 'swap':
+
+if config.context_modifier == 'swap':
+  # get raw reasoning traces
+
+  gpt_model = APIModel('gpt-4o-mini', max_tokens=config.max_generated_tokens * 2, temperature=0.4)
+
+  reword_contexts = [
+    [
+      {'role': 'system', 'content': 'Given a reasoning trace provided by the user, sanitize the reasoning trace so that:\n1. It does not contain any XML tags like <reasoning>, </reasoning>, <answer>, or </answer>.\n2. It does not mention the final answer at all, whether in the reasoning trace or in the answer XML tags.\n\nMake whatever edits are necessary to satisfy conditions 1. and 2., and leave the rest of the reasoning trace unchanged otherwise. Make sure the final answer is removed from the reasoning trace too, if it is mentioned at the last step. Output the modified reasoning trace verbatim.'},
+      {'role': 'user', 'content': teacher_completion},
+    ]
+    for teacher_completion in teacher_completions
+  ]
+
+  drop_last_sentence = lambda s: s[:s[:s.rfind('.')].rfind('.') + 1]
+  cleaned_traces = [drop_last_sentence(trace) for trace in gpt_model.generate_completions(reword_contexts)]
+
+  teacher_traces = []
+  for context, trace in zip(
+    contexts, cleaned_traces
+  ):
     modified_context = context + [{
       'role': 'assistant', 
-      'content': teacher_completion[:teacher_completion.find('<answer>')] + '<answer>'
+      'content': f'<reasoning>{trace}</reasoning>'
     }]
     modified_contexts.append(modified_context)
 
