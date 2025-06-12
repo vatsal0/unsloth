@@ -33,7 +33,7 @@ for base_model, base_strategy, base_name in models:
 
         teacher_acc, base_acc, teacher2base_acc = run_analysis(f'results/swap_{teacher_name}_{base_name}.csv')
 
-        results.loc[len(results)] = [teacher_name, base_name, teacher_acc, base_acc, teacher2base_acc, teacher2base_acc - base_acc]
+        results.loc[len(results)] = [teacher_name, base_name, f'{teacher_acc:.02%}', f'{base_acc:.02%}', f'{teacher2base_acc:.02%}', f'{teacher2base_acc - base_acc:.02%}']
       else:
         print('skipping', f'results/swap_{teacher_name}_{base_name}.csv')
 

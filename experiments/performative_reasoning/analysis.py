@@ -17,7 +17,9 @@ def run_analysis(file_path, print_stats=False):
 
     for col in ['Base Completion', 'Teacher Completion', 'Modified Base Completion']:
       extracted_answer = extract_xml_answer(row[col])
-      correct = correct_answer in extracted_answer.replace('$', '').replace('.', '').split()
+      
+      # https://stackoverflow.com/questions/3939361/remove-specific-characters-from-a-string-in-python#comment31694458_3939381
+      correct = correct_answer in extracted_answer.translate({ord(i):' ' for i in '$.*}{%]\\'}).split()
       data.loc[i, col.replace('Completion', 'Correct')] = correct
 
   if print_stats:
