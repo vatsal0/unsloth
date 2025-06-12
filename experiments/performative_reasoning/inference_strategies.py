@@ -1,22 +1,32 @@
 from abc import ABC, abstractmethod
-from tqdm import tqdm
-import time
 import random
+import time
 
 import asyncio
 import litellm
 import openai
+from tqdm import tqdm
+from unsloth import FastLanguageModel
+from vllm import SamplingParams
 
 litellm.suppress_debug_info = True
+
+together_endpoints = {
+  'meta-llama/Meta-Llama-3.1-8B-Instruct': 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+  'Qwen/Qwen2.5-7B-Instruct': 'Qwen/Qwen2.5-7B-Instruct-Turbo',
+}
 
 class InferenceStrategy(ABC):
 
   @abstractmethod
-  def generate_completion(self, messages):
+  def generate_completions(self, messages, continuation=False):
     pass
 
 class TogetherAPI(InferenceStrategy):
   def __init__(self, model_name, max_tokens, temperature):
+    if model_name in together_endpoints.keys(): 
+      model_name = together_endpoints[model_name]
+
     self.model_name = f'together_ai/{model_name}'
     self.max_tokens = max_tokens
     self.temperature = temperature
@@ -48,7 +58,7 @@ class TogetherAPI(InferenceStrategy):
     results = await asyncio.gather(*tasks)
     return results
 
-  def generate_completions(self, contexts):
+  def generate_completions(self, contexts, continuation=False):
     return asyncio.run(self.gather_completions(contexts))
 
 
@@ -56,9 +66,37 @@ class LocalUnslothModel(InferenceStrategy):
   # TODO
   # Init unsloth model
   # Call unsloth model.generate
+  def __init__(self, model_name, max_tokens, temperature):
+    self.model, self.tokenizer = FastLanguageModel.from_pretrained(
+      model_name = model_name,
+      max_seq_length = max_tokens,
+      load_in_4bit = True,
+      fast_inference = True,
+      max_lora_rank = 64,
+      gpu_memory_utilization = 0.4,
+    )
 
-  def generate_completion(self, messages):
-    raise NotImplementedError
+    seed = time.time_ns() & 8191
+    self.sampling_params = SamplingParams(
+        temperature = temperature,
+        top_p = 0.95,
+        max_tokens = max_tokens,
+        seed = seed
+    )
+
+  def generate_completions(self, messages, continuation=False):
+    inputs = [
+      self.tokenizer.apply_chat_template(
+        message, 
+        tokenize = False, 
+        add_generation_prompt = False,
+        continue_final_message = continuation,
+      )
+      for message in messages]
+    return [
+      output.outputs[0].text 
+      for output in self.model.fast_generate(inputs, sampling_params=self.sampling_params)
+    ]
 
 class OpenRouterAPI(InferenceStrategy):
   # TODO

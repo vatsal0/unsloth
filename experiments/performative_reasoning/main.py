@@ -3,7 +3,7 @@ sys.path.append('.')
 
 from omegaconf import OmegaConf
 import litellm
-from experiments.performative_reasoning.inference_strategies import TogetherAPI
+from experiments.performative_reasoning.inference_strategies import TogetherAPI, LocalUnslothModel
 from datasets import load_dataset
 import pandas as pd
 import argparse
@@ -19,9 +19,17 @@ args = parser.parse_args()
 
 config = OmegaConf.load(f'configs/{args.config}.yaml')
 
-if config.inference_strategy == 'together':
+if config.base_inference_strategy == 'together':
   base_model = TogetherAPI(config.base_model, max_tokens=config.max_generated_tokens, temperature=config.temperature)
+elif config.base_inference_strategy == 'local':
+  base_model = LocalUnslothModel(config.base_model, max_tokens=config.max_generated_tokens, temperature=config.temperature)
+else:
+  raise NotImplementedError
+
+if config.teacher_inference_strategy == 'together':
   teacher_model = TogetherAPI(config.teacher_model, max_tokens=config.max_generated_tokens, temperature=config.temperature)
+elif config.teacher_inference_strategy == 'local':
+  teacher_model = LocalUnslothModel(config.teacher_model, max_tokens=config.max_generated_tokens, temperature=config.temperature)
 else:
   raise NotImplementedError
 
@@ -68,15 +76,15 @@ for context, base_completion, teacher_completion in zip(
   if config.context_modifier == 'swap':
     modified_context = context + [{
       'role': 'assistant', 
-      'content': teacher_completion[:teacher_completion.find('</reasoning>') + len('</reasoning>')]
+      'content': teacher_completion[:teacher_completion.find('<answer>')] + '<answer>'
     }]
     modified_contexts.append(modified_context)
 
-modified_completions = base_model.generate_completions(modified_contexts)
+modified_completions = base_model.generate_completions(modified_contexts, continuation=True)
 
 for i in range(config.n_samples):
   results.iloc[:, 1] = base_completions
   results.iloc[:, 2] = teacher_completions
   results.iloc[:, 3] = modified_completions
 
-results.to_csv(f'results/{args.config}_{get_git_revision_short_hash()}.csv')
+results.to_csv(f'results/{args.config}.csv')
